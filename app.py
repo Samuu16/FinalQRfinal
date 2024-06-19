@@ -14,8 +14,6 @@ from dotenv import load_dotenv
 from datetime import datetime
 import pyodbc
 import traceback 
-# Load environment variables from .env file
-load_dotenv()
 
 # Instantiate Flask application
 app = Flask(__name__)
@@ -30,11 +28,7 @@ encrypt = os.getenv('SQL_ENCRYPT', 'yes')
 trust_cert = os.getenv('SQL_TRUST_SERVER_CERTIFICATE', 'no')
 timeout = os.getenv('SQL_CONNECTION_TIMEOUT', '30')
 
-# Print environment variables for debugging
-print(f"SQL_SERVER: {server}")
-print(f"SQL_DATABASE: {database}")
-print(f"SQL_USER: {username}")
-print(f"SQL_PASSWORD: {'*****'}")  # Print password partially for security
+
 
 # Construct the connection string
 params = urllib.parse.quote_plus(
@@ -51,8 +45,6 @@ params = urllib.parse.quote_plus(
 app.config['SQLALCHEMY_DATABASE_URI'] = f'mssql+pyodbc:///?odbc_connect={params}'
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 
-# Print the constructed connection string for debugging purposes
-print(f"Connection String: {app.config['SQLALCHEMY_DATABASE_URI']}")
 
 db = SQLAlchemy(app)
 app.secret_key = 'secret_key'
