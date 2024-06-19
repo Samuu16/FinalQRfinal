@@ -3,29 +3,57 @@ from flask_sqlalchemy import SQLAlchemy
 import bcrypt
 import logging
 import json
-
+import os
 import qrcode  # Import QR code library
 import io
 from reportlab.lib.pagesizes import letter
 from reportlab.pdfgen import canvas
 from sqlalchemy import LargeBinary
 import urllib.parse
+from dotenv import load_dotenv
+from datetime import datetime
+import pyodbc
+
+# Load environment variables from .env file
+load_dotenv()
 
 # Instantiate Flask application
 app = Flask(__name__)
 
+# Read environment variables
+server = os.getenv('SQL_SERVER')
+database = os.getenv('SQL_DATABASE')
+username = os.getenv('SQL_USER')
+password = os.getenv('SQL_PASSWORD')
+driver = os.getenv('SQL_DRIVER', 'ODBC Driver 18 for SQL Server')
+encrypt = os.getenv('SQL_ENCRYPT', 'yes')
+trust_cert = os.getenv('SQL_TRUST_SERVER_CERTIFICATE', 'no')
+timeout = os.getenv('SQL_CONNECTION_TIMEOUT', '30')
 
-# Correct connection string
-params = urllib.parse.quote_plus("DRIVER={ODBC Driver 18 for SQL Server};"
-                                 "SERVER=tcp:myserver126.database.windows.net,1433;"
-                                 "DATABASE=newdb;"
-                                 "UID=samiksha;"
-                                 "PWD=Sneha123;"
-                                 "Encrypt=yes;"
-                                 "TrustServerCertificate=no;"
-                                 "Connection Timeout=30;")
+# Print environment variables for debugging
+print(f"SQL_SERVER: {server}")
+print(f"SQL_DATABASE: {database}")
+print(f"SQL_USER: {username}")
+print(f"SQL_PASSWORD: {'*****'}")  # Print password partially for security
+
+# Construct the connection string
+params = urllib.parse.quote_plus(
+    f"DRIVER={driver};"
+    f"SERVER={server},1433;"
+    f"DATABASE={database};"
+    f"UID={username};"
+    f"PWD={password};"
+    f"Encrypt={encrypt};"
+    f"TrustServerCertificate={trust_cert};"
+    f"Connection Timeout={timeout};"
+)
+
 app.config['SQLALCHEMY_DATABASE_URI'] = f'mssql+pyodbc:///?odbc_connect={params}'
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
+
+# Print the constructed connection string for debugging purposes
+print(f"Connection String: {app.config['SQLALCHEMY_DATABASE_URI']}")
+
 db = SQLAlchemy(app)
 app.secret_key = 'secret_key'
 
@@ -94,7 +122,7 @@ class User(db.Model):
 
 class LevelSensorData(db.Model):
     id = db.Column(db.Integer, primary_key=True, autoincrement=True)
-    date = db.Column(db.String(50))
+    date = db.Column(db.DateTime)
     full_addr = db.Column(db.Integer)
     sensor_data = db.Column(db.Float)
     vehicleno = db.Column(db.String(50))
@@ -103,7 +131,7 @@ class LevelSensorData(db.Model):
     pdf = db.Column(LargeBinary)
    
     def __init__(self, date, full_addr, sensor_data, vehicleno, volume_liters):
-        self.date = date
+        self.date = datetime.strptime(date, '%d/%m/%Y %H:%M:%S')  # Parse date string into datetime object with time
         self.full_addr = full_addr
         self.sensor_data = sensor_data
         self.vehicleno = vehicleno
@@ -429,15 +457,16 @@ def get_sensor_data():
         if not sensor_data:
             return jsonify(error='No data available'), 404
 
-        labels = [str(data.date) for data in sensor_data]
+        labels = [data.date.strftime('%d/%m/%Y %H:%M:%S') for data in sensor_data]
         sensor_values = [data.sensor_data for data in sensor_data]
         volume_liters = [data.volume_liters for data in sensor_data]
-        
+
         return jsonify(labels=labels, sensorData=sensor_values, volumeLiters=volume_liters)
     except Exception as e:
         print(f"Error fetching sensor data: {str(e)}")
         return jsonify(error='Internal server error'), 500
     
+
     #qr and pdf
 @app.route('/generate_pdf/<int:id>', methods=['GET'])
 def generate_pdf(id):
