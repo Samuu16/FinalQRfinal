@@ -13,7 +13,7 @@ import urllib.parse
 from dotenv import load_dotenv
 from datetime import datetime
 import pyodbc
-
+import traceback 
 # Load environment variables from .env file
 load_dotenv()
 
