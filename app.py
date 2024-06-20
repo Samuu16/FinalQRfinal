@@ -1,4 +1,4 @@
-from flask import Flask, request,send_file, render_template, redirect, session, url_for, jsonify
+from flask import Flask, request,send_file, render_template, redirect, session, url_for, jsonify, send_from_directory
 from flask_sqlalchemy import SQLAlchemy
 import bcrypt
 import logging
@@ -98,6 +98,14 @@ def health_check():
         return jsonify(status="OK", message="Database connection is healthy"), 200
     else:
         return jsonify(status="Error", message="Database connection failed"), 500
+    
+ # Route to serve the favicon
+@app.route('/favicon.ico')
+def favicon():
+    return send_from_directory(os.path.join(app.root_path, 'static'),
+                               'favicon.ico', mimetype='image/vnd.microsoft.icon')   
+
+
 # Define conversion table
 conversion_table = {
     240: 8.875,
