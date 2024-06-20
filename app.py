@@ -2,7 +2,9 @@ from flask import Flask, request,send_file, render_template, redirect, session, 
 from flask_sqlalchemy import SQLAlchemy
 import bcrypt
 import logging
+from logging.config import dictConfig
 import json
+from sqlalchemy import create_engine
 import os
 import qrcode  # Import QR code library
 import io
@@ -11,9 +13,15 @@ from reportlab.pdfgen import canvas
 from sqlalchemy import LargeBinary
 import urllib.parse
 from dotenv import load_dotenv
-from datetime import datetime
 import pyodbc
-import traceback 
+from sqlalchemy.exc import SQLAlchemyError
+from sqlalchemy import exc as sqla_exc, text # Import all exceptions from sqlalchemy
+
+
+from datetime import datetime
+
+# Load environment variables from .env file
+load_dotenv()
 
 # Instantiate Flask application
 app = Flask(__name__)
@@ -28,12 +36,16 @@ encrypt = os.getenv('SQL_ENCRYPT', 'yes')
 trust_cert = os.getenv('SQL_TRUST_SERVER_CERTIFICATE', 'no')
 timeout = os.getenv('SQL_CONNECTION_TIMEOUT', '30')
 
-
+# Print environment variables for debugging
+print(f"SQL_SERVER: {server}")
+print(f"SQL_DATABASE: {database}")
+print(f"SQL_USER: {username}")
+print(f"SQL_PASSWORD: {'*****'}")  # Print password partially for security
 
 # Construct the connection string
-params = urllib.parse.quote_plus(
+conn_str = (
     f"DRIVER={driver};"
-    f"SERVER={server},1433;"
+    f"SERVER={server};"
     f"DATABASE={database};"
     f"UID={username};"
     f"PWD={password};"
@@ -41,14 +53,51 @@ params = urllib.parse.quote_plus(
     f"TrustServerCertificate={trust_cert};"
     f"Connection Timeout={timeout};"
 )
-
-app.config['SQLALCHEMY_DATABASE_URI'] = f'mssql+pyodbc:///?odbc_connect={params}'
+app.config['SQLALCHEMY_DATABASE_URI'] = f'mssql+pyodbc:///?odbc_connect={urllib.parse.quote_plus(conn_str)}'
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 
 
+
+
+# Initialize SQLAlchemy
 db = SQLAlchemy(app)
 app.secret_key = 'secret_key'
 
+
+# Function to check database connection
+def check_database_connection():
+    try:
+        conn = pyodbc.connect(conn_str)
+        cursor = conn.cursor()
+        cursor.execute('SELECT 1')
+        row = cursor.fetchone()
+        if row and len(row) > 0:
+            print("Database connection successful.")
+            return True
+        else:
+            print("Database returned empty result.")
+            return False
+    except pyodbc.Error as e:
+        print(f"PyODBC error: {str(e)}")
+        print("Failed to connect using pyodbc.")
+        return False
+    finally:
+        try:
+            cursor.close()
+            conn.close()
+        except:
+            pass
+# Health check endpoint
+@app.route('/health')
+def health_check():
+    # Check database connection
+    print("Checking database health...")
+    is_database_connected = check_database_connection()
+
+    if is_database_connected:
+        return jsonify(status="OK", message="Database connection is healthy"), 200
+    else:
+        return jsonify(status="Error", message="Database connection failed"), 500
 # Define conversion table
 conversion_table = {
     240: 8.875,
@@ -166,6 +215,7 @@ class LevelSensorData(db.Model):
         return (f"<LevelSensorData(date='{self.date}', full_addr='{self.full_addr}', "
                 f"sensor_data={self.sensor_data}, vehicleno='{self.vehicleno}', "
                 f"volume_liters={self.volume_liters})>")
+
 
 def create_admin_user():
     admin_email = 'admin@gmail.com'
